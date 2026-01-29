@@ -1,157 +1,178 @@
+import heapq
+from collections import deque
 import tkinter as tk
 from tkinter import ttk, messagebox
-from collections import defaultdict, deque
-import heapq
-
-# ------------------------------
-# Metro Ağında Rota  Belirleme Sümülasyonu
-# ------------------------------
 
 class Istasyon:
-    def __init__(self, ad):
+    def __init__(self, idx, ad):
+        self.idx = idx
         self.ad = ad
-        self.komsular = []
-
-    def ekle(self, istasyon, sure):
-        self.komsular.append((istasyon, sure))
+        self.komsular = {}  # idx -> süre
 
 class MetroAgi:
     def __init__(self):
         self.istasyonlar = {}
 
-    def istasyon(self, ad):
-        if ad not in self.istasyonlar:
-            self.istasyonlar[ad] = Istasyon(ad)
-        return self.istasyonlar[ad]
+    def istasyon_ekle(self, idx, ad):
+        self.istasyonlar[idx] = Istasyon(idx, ad)
 
-    def bagla(self, a, b, sure):
-        self.istasyon(a).ekle(self.istasyon(b), sure)
-        self.istasyon(b).ekle(self.istasyon(a), sure)
+    def baglanti_ekle(self, a, b, sure):
+        self.istasyonlar[a].komsular[b] = sure
+        self.istasyonlar[b].komsular[a] = sure
 
-    def en_hizli(self, bas, hedef):
+    
+    def en_az_aktarma_bul(self, bas, hedef):
+        kuyruk = deque([(bas, [bas])])
+        ziyaret = set([bas])
+
+        while kuyruk:
+            simdiki, yol = kuyruk.popleft()
+            if simdiki == hedef:
+                return [self.istasyonlar[i] for i in yol]
+
+            for komsu in self.istasyonlar[simdiki].komsular:
+                if komsu not in ziyaret:
+                    ziyaret.add(komsu)
+                    kuyruk.append((komsu, yol + [komsu]))
+
+        return None
         
-        pq = [(0, bas)]
-        mesafe = {bas: 0}
-        onceki = {}
+    def en_hizli_rota_bul(self, bas, hedef):
+        pq = [(0, bas, [bas])]
+        en_iyi = {bas: 0}
 
         while pq:
-            sure, suanki = heapq.heappop(pq)
+            maliyet, simdiki, yol = heapq.heappop(pq)
 
-            if suanki == hedef:
-                break
+            if simdiki == hedef:
+                return [self.istasyonlar[i] for i in yol], maliyet
 
-            if sure > mesafe.get(suanki, float('inf')):
-                continue
+            for komsu, sure in self.istasyonlar[simdiki].komsular.items():
+                yeni_maliyet = maliyet + sure
+                if komsu not in en_iyi or yeni_maliyet < en_iyi[komsu]:
+                    en_iyi[komsu] = yeni_maliyet
+                    heapq.heappush(
+                        pq,
+                        (yeni_maliyet, komsu, yol + [komsu])
+                    )
 
-            for komsu, s in self.istasyonlar[suanki].komsular:
-                yeni_sure = sure + s
-                if yeni_sure < mesafe.get(komsu.ad, float('inf')):
-                    mesafe[komsu.ad] = yeni_sure
-                    onceki[komsu.ad] = suanki
-                    heapq.heappush(pq, (yeni_sure, komsu.ad))
-
-        if hedef not in mesafe:
-            return None
-
-       
-        yol = []
-        cur = hedef
-        while cur:
-            yol.append(cur)
-            cur = onceki.get(cur)
-        yol.reverse()
-
-        return yol, mesafe[hedef]
-
-    def en_az_aktarma(self, bas, hedef):
-        q = deque([(bas, [bas])])
-        ziyaret = {bas}
-        while q:
-            suanki, yol = q.popleft()
-            if suanki == hedef:
-                return yol
-            for komsu, _ in self.istasyonlar[suanki].komsular:
-                if komsu.ad not in ziyaret:
-                    ziyaret.add(komsu.ad)
-                    q.append((komsu.ad, yol + [komsu.ad]))
         return None
-
 
 metro = MetroAgi()
 
+istasyonlar = [
+    (1, "AŞTİ"),
+    (2, "Kızılay"),
+    (3, "Ulus"),
+    (4, "Sıhhiye"),
+    (5, "OSB")
+]
 
-metro.bagla("AŞTİ", "Kızılay", 5)
-metro.bagla("Kızılay", "Ulus", 4)
-metro.bagla("Ulus", "Demetevler", 6)
-metro.bagla("Demetevler", "OSB", 8)
-metro.bagla("Kızılay", "Sıhhiye", 3)
-metro.bagla("Sıhhiye", "Gar", 4)
-metro.bagla("Gar", "Keçiören", 5)
-metro.bagla("Batıkent", "Demetevler", 7)
-metro.bagla("Demetevler", "Gar", 9)
+for idx, ad in istasyonlar:
+    metro.istasyon_ekle(idx, ad)
 
-# ------------------------------
-# Arayüz
-# ------------------------------
+baglantilar = [
+    (1, 2, 6),
+    (2, 4, 4),
+    (4, 3, 3),
+    (3, 5, 8),
+    (2, 3, 5)
+]
 
-class MetroUI:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Metro Ağında Uygun Rotanın Bulması Sümülasyonu")
-        self.root.geometry("900x500")
+for a, b, s in baglantilar:
+    metro.baglanti_ekle(a, b, s)
 
-        tk.Label(root, text="Metro Ağında Uygun Rotanın Bulması Sümülasyonu", font=("Segoe UI", 20, "bold")).pack(pady=10)
+# -------------------------------
+# ARAYÜZ
+# -------------------------------
 
-        main = tk.Frame(root)
-        main.pack(fill="both", expand=True, padx=20, pady=20)
+def arayuz_baslat(metro: MetroAgi):
+    root = tk.Tk()
+    root.title("Metro Rota Bulma Sistemi")
+    root.geometry("850x450")
 
-        left = tk.Frame(main)
-        left.pack(side="left", fill="y")
+    tk.Label(
+        root,
+        text="Metro Ağında Rota Bulma",
+        font=("Segoe UI", 18, "bold")
+    ).pack(pady=10)
 
-        istasyonlar = list(metro.istasyonlar.keys())
+    frame = tk.Frame(root)
+    frame.pack(pady=10)
 
-        tk.Label(left, text="Başlangıç").pack()
-        self.start = ttk.Combobox(left, values=istasyonlar)
-        self.start.pack()
+    istasyon_adlari = [i.ad for i in metro.istasyonlar.values()]
 
-        tk.Label(left, text="Hedef").pack(pady=(10,0))
-        self.end = ttk.Combobox(left, values=istasyonlar)
-        self.end.pack()
+    tk.Label(frame, text="Başlangıç").grid(row=0, column=0, padx=10)
+    tk.Label(frame, text="Hedef").grid(row=0, column=1, padx=10)
 
-        self.mode = tk.StringVar(value="fast")
-        tk.Radiobutton(left, text="En Hızlı", variable=self.mode, value="fast").pack(pady=10)
-        tk.Radiobutton(left, text="En Az Aktarmalı", variable=self.mode, value="transfer").pack()
+    start_cb = ttk.Combobox(frame, values=istasyon_adlari, width=20)
+    end_cb = ttk.Combobox(frame, values=istasyon_adlari, width=20)
 
-        tk.Button(left, text="Hesapla", command=self.hesapla).pack(pady=20)
+    start_cb.grid(row=1, column=0, padx=10)
+    end_cb.grid(row=1, column=1, padx=10)
 
-        self.out = tk.Text(main, font=("Consolas", 11))
-        self.out.pack(side="right", fill="both", expand=True)
+    algoritma = tk.StringVar(value="fast")
 
-    def hesapla(self):
-        bas = self.start.get()
-        hedef = self.end.get()
-        self.out.delete("1.0", tk.END)
+    tk.Radiobutton(
+        frame, text="En Hızlı Rota (A*)",
+        variable=algoritma, value="fast"
+    ).grid(row=2, column=0, pady=10)
 
-        if not bas or not hedef:
-            messagebox.showwarning("Uyarı", "İstasyon seçiniz")
+    tk.Radiobutton(
+        frame, text="En Az Aktarmalı (BFS)",
+        variable=algoritma, value="bfs"
+    ).grid(row=2, column=1)
+
+    output = tk.Text(root, height=10, font=("Consolas", 11))
+    output.pack(fill="both", padx=20, pady=10)
+
+    ad_to_id = {i.ad: i.idx for i in metro.istasyonlar.values()}
+
+    def hesapla():
+        output.delete("1.0", tk.END)
+
+        bas_ad = start_cb.get()
+        hedef_ad = end_cb.get()
+
+        if bas_ad not in ad_to_id or hedef_ad not in ad_to_id:
+            messagebox.showwarning("Hata", "Geçerli istasyon seçiniz")
             return
 
-        if self.mode.get() == "fast":
-            sonuc = metro.en_hizli(bas, hedef)
-            if not sonuc:
-                self.out.insert(tk.END, "Rota bulunamadı")
-                return
-            yol, sure = sonuc
-            self.out.insert(tk.END, f"En hızlı rota ({sure} dk):\n" + " → ".join(yol))
+        bas = ad_to_id[bas_ad]
+        hedef = ad_to_id[hedef_ad]
+
+        if algoritma.get() == "bfs":
+            yol = metro.en_az_aktarma_bul(bas, hedef)
+            if yol:
+                output.insert(
+                    tk.END,
+                    "En az aktarmalı rota:\n" +
+                    " → ".join(i.ad for i in yol)
+                )
+            else:
+                output.insert(tk.END, "Rota bulunamadı")
         else:
-            yol = metro.en_az_aktarma(bas, hedef)
-            if not yol:
-                self.out.insert(tk.END, "Rota bulunamadı")
-                return
-            self.out.insert(tk.END, "En az aktarmalı rota:\n" + " → ".join(yol))
+            sonuc = metro.en_hizli_rota_bul(bas, hedef)
+            if sonuc:
+                yol, sure = sonuc
+                output.insert(
+                    tk.END,
+                    "En hızlı rota:\n" +
+                    " → ".join(i.ad for i in yol) +
+                    f"\n\nToplam Süre: {sure} dk"
+                )
+            else:
+                output.insert(tk.END, "Rota bulunamadı")
+    tk.Button(
+        root,
+        text="Rota Hesapla",
+        command=hesapla,
+        bg="#2563eb",
+        fg="white",
+        font=("Segoe UI", 10, "bold"),
+        width=20
+    ).pack(pady=10)
 
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    MetroUI(root)
     root.mainloop()
+
+arayuz_baslat(metro)
