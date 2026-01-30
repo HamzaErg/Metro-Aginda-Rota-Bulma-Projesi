@@ -1,6 +1,6 @@
 # Metro Ağında Rota Bulma Projesi
 
-Bu proje, bi metro ağındaki istasyonlar arasında en az aktarmalı ve hızlı rotaları bulmayı amaçlayan bir Python uygulamasıdır. BFS (Genişlik Öncelikli Arama) ve A\* algoritmaları kullanılarak geliştirilmiştir.
+Bu proje, bi metro ağındaki istasyonlar arasında en az aktarmalı ve hızlı rotaları bulmayı amaçlayan bir Python uygulamasıdır. BFS (Genişlik Öncelikli Arama) ve A* algoritmaları kullanılarak geliştirilmiştir.
 
 ## Proje Amacı
 
